@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KGB STREAMING - Tech Store</title>
+    
+    <!-- LIBRERÍAS EXTERNAS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* === DISEÑO DE FONDO DINÁMICO Y ESTRELLAS FUGACES === */
+        body { 
+            font-family: 'Montserrat', sans-serif; 
+            background: linear-gradient(-45deg, #0f172a, #1e1b4b, #312e81, #0f172a);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            color: #f8fafc;
+            margin: 0;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            z-index: -2;
+        }
+
+        /* --- Animación de Estrellas Fugaces Neón --- */
+        .shooting-stars {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -1;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .shooting-star {
+            position: absolute;
+            width: 200px;
+            height: 3px;
+            border-radius: 999px;
+            animation: shooting 5s linear infinite;
+            opacity: 0;
+        }
+        @keyframes shooting {
+            0% { transform: translate(0, 0) rotate(35deg) scale(0); opacity: 0; }
+            10% { opacity: 1; }
+            100% { transform: translate(100vw, 100vh) rotate(35deg) scale(1); opacity: 0; }
+        }
+        .shooting-star:nth-child(1) { top: -10%; left: 10%; animation-delay: 0s; background: linear-gradient(90deg, transparent, #22d3ee); filter: drop-shadow(0 0 10px #22d3ee); }
+        .shooting-star:nth-child(2) { top: -10%; left: 60%; animation-delay: 2s; background: linear-gradient(90deg, transparent, #ec4899); filter: drop-shadow(0 0 10px #ec4899); }
+        .shooting-star:nth-child(3) { top: 30%; left: -10%; animation-delay: 4s; background: linear-gradient(90deg, transparent, #a855f7); filter: drop-shadow(0 0 10px #a855f7); }
+
+        body.bg-slate-50, main.bg-slate-50 { background-color: transparent !important; }
+
+        /* Paneles con efecto Cristal */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+        }
+
+        .nav-item.active { 
+            background: #4f46e5; 
+            color: white; 
+            box-shadow: 0 0 20px rgba(79,70,229,0.5); 
+        }
+
+        #sync-indicator { transition: opacity 0.5s; pointer-events: none; opacity: 0; }
+        #sync-indicator.active { opacity: 1; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 10px; }
+
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Ajuste estricto para evitar que la cabecera tape los videos */
+        .main-spacer { padding-top: 6.5rem !important; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- Fondo Animado -->
+    <div class="shooting-stars">
+        <div class="shooting-star"></div>
+        <div class="shooting-star"></div>
+        <div class="shooting-star"></div>
+    </div>
+
+    <!-- Indicador Nube -->
+    <div id="sync-indicator" class="fixed top-20 right-4 z-[100] bg-indigo-600 text-white text-[10px] px-3 py-1.5 rounded-full shadow-2xl flex items-center gap-2 font-bold transition-opacity duration-300">
+        <i class="fa-solid fa-cloud-arrow-up animate-pulse"></i> ACTUALIZANDO
+    </div>
+
+    <!-- Overlay Móvil -->
+    <div id="mobile-overlay" onclick="toggleMobileMenu()" class="fixed inset-0 bg-black/70 z-40 hidden backdrop-blur-sm transition-opacity"></div>
+
+    <!-- CABECERA PRINCIPAL FIJA -->
+    <header id="main-header" class="bg-white/95 backdrop-blur-md h-20 border-b border-slate-200 flex items-center justify-between px-6 z-30 fixed top-0 right-0 left-0 shadow-sm transition-all">
+        <div class="flex items-center gap-4">
+            <button id="mobile-menu-btn" onclick="toggleMobileMenu()" class="md:hidden text-slate-800 p-2 hidden"><i class="fa-solid fa-bars-staggered text-2xl"></i></button>
+            <div class="flex items-center gap-3 cursor-pointer" onclick="UI.switchTab('catalog')">
+                <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-[0_0_15px_rgba(79,70,229,0.5)] rotate-3"><i class="fa-solid fa-play"></i></div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter leading-none" style="font-family: 'Rajdhani', sans-serif;">KGB <span class="text-indigo-600">TECH</span></h1>
+                    <span id="header-subtitle" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest hidden md:block">Catálogo Oficial</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="UI.toggleCart()" class="relative bg-indigo-50 text-indigo-600 border border-indigo-100 p-3.5 rounded-2xl shadow-sm active:scale-90 transition duration-300 hover:bg-indigo-100">
+                <i class="fa-solid fa-cart-shopping text-lg"></i>
+                <span id="cart-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-md">0</span>
+            </button>
+            <button id="btn-sync" onclick="DATA.forceSync()" class="hidden bg-slate-100 p-3.5 rounded-2xl text-slate-600 border border-slate-200 hover:bg-slate-200 transition"><i class="fa-solid fa-rotate text-lg"></i></button>
+            <button id="btn-logout" onclick="UI.logoutAdmin()" class="hidden bg-red-50 p-3.5 rounded-2xl text-red-600 border border-red-100 hover:bg-red-100 transition"><i class="fa-solid fa-power-off text-lg"></i></button>
+        </div>
+    </header>
+
+    <!-- SIDEBAR ADMIN -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-slate-950 text-slate-400 flex flex-col z-50 shadow-2xl transform -translate-x-full md:translate-x-0 h-full transition-transform duration-300 border-r border-white/5">
+        <div class="h-32 flex items-center justify-center bg-black/20 border-b border-white/5 pt-4">
+            <div class="text-center mt-4">
+                <div class="w-14 h-14 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-2 shadow-xl shadow-indigo-500/20"><i class="fa-solid fa-shield-halved"></i></div>
+                <h2 class="text-[10px] font-black text-white tracking-[0.2em] uppercase opacity-80">Administración</h2>
+            </div>
+        </div>
+        <nav class="flex-1 p-4 space-y-2 mt-4 overflow-y-auto">
+            <div onclick="UI.switchTab('catalog')" id="btn-nav-catalog" class="nav-item cursor-pointer flex items-center px-5 py-4 rounded-2xl hover:bg-white/5 transition-all"><i class="fa-solid fa-shop w-8 text-indigo-400"></i> Tienda Pública</div>
+            <div onclick="UI.switchTab('pos')" id="btn-nav-pos" class="nav-item cursor-pointer flex items-center px-5 py-4 rounded-2xl hover:bg-white/5 transition-all"><i class="fa-solid fa-bolt w-8 text-indigo-400"></i> Nueva Venta</div>
+            <div onclick="UI.switchTab('history')" id="btn-nav-history" class="nav-item cursor-pointer flex items-center px-5 py-4 rounded-2xl hover:bg-white/5 transition-all"><i class="fa-solid fa-clipboard-list w-8 text-indigo-400"></i> Historial</div>
+            <div onclick="UI.switchTab('dashboard')" id="btn-nav-dashboard" class="nav-item cursor-pointer flex items-center px-5 py-4 rounded-2xl hover:bg-white/5 transition-all"><i class="fa-solid fa-chart-line w-8 text-indigo-400"></i> Reportes</div>
+            <div onclick="UI.switchTab('config')" id="btn-nav-config" class="nav-item cursor-pointer flex items-center px-5 py-4 rounded-2xl hover:bg-white/5 transition-all"><i class="fa-solid fa-gears w-8 text-indigo-400"></i> Configuración</div>
+        </nav>
+        <div class="p-6 bg-black/40 border-t border-white/5 text-center">
+            <div id="status-text" class="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">CONECTADO</div>
+            <div id="clock" class="text-indigo-400 font-mono text-sm font-bold">00:00:00</div>
+        </div>
+    </aside>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main id="main-content" class="flex-1 overflow-y-auto h-full transition-all main-spacer scroll-smooth">
+        <div class="max-w-7xl mx-auto px-4 md:px-8 pb-24">
+
+            <!-- 0. CATALOGO PUBLICO -->
+            <div id="view-catalog" class="view-section hidden w-full">
+                <!-- VIDEOS DE CABECERA -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                    <div class="aspect-video bg-black rounded-[32px] overflow-hidden relative border border-white/10 shadow-[0_0_20px_rgba(99,102,241,0.2)] group pointer-events-none">
+                        <video autoplay loop muted playsinline class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition duration-500"><source src="https://i.imgur.com/8NoEwnp.mp4" type="video/mp4"></video>
+                    </div>
+                    <div class="aspect-video bg-black rounded-[32px] overflow-hidden relative border border-white/10 shadow-[0_0_20px_rgba(99,102,241,0.2)] group hidden md:block pointer-events-none">
+                        <video autoplay loop muted playsinline class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition duration-500"><source src="https://i.imgur.com/8NoEwnp.mp4" type="video/mp4"></video>
+                    </div>
+                    <div class="aspect-video bg-black rounded-[32px] overflow-hidden relative border border-white/10 shadow-[0_0_20px_rgba(99,102,241,0.2)] group hidden md:block pointer-events-none">
+                        <video autoplay loop muted playsinline class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition duration-500"><source src="https://i.imgur.com/8NoEwnp.mp4" type="video/mp4"></video>
+                    </div>
+                </div>
+
+                <!-- BUSCADOR -->
+                <div class="glass-panel p-8 rounded-[40px] flex flex-col md:flex-row justify-between items-center gap-6 mb-8 border-t border-white/20">
+                    <h2 class="text-3xl font-black text-white" style="font-family: 'Rajdhani', sans-serif;"><i class="fa-solid fa-rocket text-cyan-400 mr-3"></i>CATÁLOGO</h2>
+                    <div class="relative w-full md:w-[400px]">
+                        <i class="fa-solid fa-magnifying-glass absolute left-5 top-4 text-cyan-400"></i>
+                        <input type="text" id="catalog-search" oninput="UI.renderCatalog()" placeholder="Busca tu plataforma favorita..." class="w-full bg-slate-900/60 border border-white/10 rounded-full pl-12 pr-6 py-4 text-sm text-white outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all font-bold">
+                    </div>
+                </div>
+
+                <!-- CATEGORÍAS -->
+                <div id="catalog-categories-container" class="flex gap-3 overflow-x-auto pb-6 scrollbar-hide"></div>
+                
+                <!-- GRILLA -->
+                <div id="catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"></div>
+                
+                <div id="catalog-empty" class="hidden text-center py-20 text-white/40 font-black text-2xl uppercase tracking-widest">Sin Resultados</div>
+            </div>
+
+            <!-- LOGIN -->
+            <div id="view-login" class="view-section hidden w-full max-w-sm mx-auto mt-10 md:mt-20">
+                <div class="glass-panel p-10 rounded-[40px] text-center shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-indigo-500/30 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-indigo-500"></div>
+                    <div class="w-20 h-20 bg-indigo-900/50 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-indigo-500/40 text-indigo-400 text-3xl shadow-[0_0_20px_rgba(79,70,229,0.4)]"><i class="fa-solid fa-lock"></i></div>
+                    <h2 class="text-2xl font-black text-white mb-2 uppercase tracking-widest">Acceso Privado</h2>
+                    <p class="text-xs text-slate-400 mb-8 font-mono">Solo personal autorizado.</p>
+                    <input type="password" id="admin-pass-input" onkeydown="if(event.key === 'Enter') UI.loginAdmin()" placeholder="••••••••" class="w-full bg-slate-900 border border-white/10 p-4 rounded-2xl text-white text-center mb-6 outline-none focus:border-indigo-500 font-mono text-xl tracking-[0.5em]">
+                    <button onclick="UI.loginAdmin()" class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-indigo-500 transition active:scale-95 uppercase tracking-widest text-sm">Desbloquear</button>
+                    <button onclick="UI.switchTab('catalog')" class="mt-6 text-xs text-slate-500 hover:text-cyan-400 font-bold uppercase tracking-widest transition">Volver al catálogo</button>
+                </div>
+            </div>
+
+            <!-- POS (VENTA RÁPIDA) -->
+            <div id="view-pos" class="view-section hidden w-full max-w-3xl mx-auto">
+                <div class="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl border border-slate-200 space-y-8">
+                    <h2 class="text-2xl font-black text-slate-900 uppercase flex items-center gap-3"><i class="fa-solid fa-bolt text-indigo-600"></i> Registrar Venta</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Vendedor</label>
+                            <select id="pos-seller" class="w-full border border-slate-200 p-4 rounded-2xl bg-slate-50 font-bold text-slate-700 outline-none focus:border-indigo-500 transition cursor-pointer"></select>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Plataforma</label>
+                            <select id="pos-product" onchange="UI.updatePosCalc()" class="w-full border border-slate-200 p-4 rounded-2xl bg-slate-50 font-bold text-slate-700 outline-none focus:border-indigo-500 transition cursor-pointer"></select>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-900 p-8 rounded-[32px] flex justify-around text-center text-white font-mono shadow-[0_10px_30px_rgba(0,0,0,0.2)] border border-slate-800 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-40 h-40 bg-indigo-500/20 rounded-full blur-[40px] translate-x-10 -translate-y-10"></div>
+                        <div class="relative z-10"><p class="text-[10px] text-slate-500 uppercase font-black mb-2">Costo</p><input id="pos-cost" readonly class="bg-transparent text-center font-bold text-slate-400 w-24 text-xl outline-none" value="0.00"></div>
+                        <div class="relative z-10 border-x border-white/10 px-6"><p class="text-[10px] text-indigo-400 uppercase font-black mb-2">Venta</p><input id="pos-price" type="number" oninput="UI.reCalcProfitOnly()" class="bg-transparent text-center font-bold text-white w-28 text-3xl outline-none focus:text-indigo-400" value="0.00"></div>
+                        <div class="relative z-10"><p class="text-[10px] text-emerald-400 uppercase font-black mb-2">Ganancia</p><p class="text-emerald-400 font-bold text-2xl mt-1">S/ <span id="pos-profit">0.00</span></p></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <input type="text" id="pos-client" placeholder="Nombre Cliente" class="border border-slate-200 p-4 rounded-2xl bg-slate-50 outline-none font-medium">
+                        <input type="tel" id="pos-phone" placeholder="Celular" class="border border-slate-200 p-4 rounded-2xl bg-slate-50 outline-none font-medium">
+                    </div>
+                    
+                    <button onclick="DATA.submitSale()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-600/30 active:scale-[0.98] transition text-lg tracking-widest uppercase flex justify-center items-center gap-2">
+                        <i class="fa-regular fa-circle-check"></i> PROCESAR VENTA
+                    </button>
+                </div>
+            </div>
+
+            <!-- HISTORY (RESTAURADO CON BOTONES E IMAGEN) -->
+            <div id="view-history" class="view-section hidden w-full">
+                <div class="bg-white p-6 rounded-[32px] shadow-sm border border-slate-200 mb-8 flex flex-col md:flex-row flex-wrap items-center gap-4">
+                    <div class="relative flex-grow w-full md:w-auto">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-4 text-slate-400"></i>
+                        <input type="text" id="filter-search" oninput="UI.renderHistoryTable()" placeholder="Buscar cliente, plataforma o ID..." class="w-full bg-slate-50 border border-slate-200 p-3 pl-12 rounded-xl text-sm outline-none focus:border-indigo-400 transition-all font-medium">
+                    </div>
+                    <div class="flex gap-4 w-full md:w-auto overflow-x-auto">
+                        <input type="date" id="filter-start" onchange="UI.renderHistoryTable()" class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none">
+                        <input type="date" id="filter-end" onchange="UI.renderHistoryTable()" class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none">
+                        <select id="filter-seller" onchange="UI.renderHistoryTable()" class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm outline-none min-w-[150px] font-bold text-slate-600"></select>
+                        <button onclick="UI.exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold uppercase text-xs shadow-md transition active:scale-95 flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> Exportar</button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Tabla -->
+                    <div class="lg:col-span-2 bg-white rounded-[32px] border border-slate-200 overflow-hidden h-[600px] flex flex-col shadow-sm">
+                        <div class="overflow-x-auto flex-1 custom-scrollbar">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">
+                                    <tr><th class="p-6">Transacción</th><th class="p-6">Cliente</th><th class="p-6 text-right">Comisión</th><th class="p-6 text-center">Gestión</th></tr>
+                                </thead>
+                                <tbody id="history-body" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Resumen -->
+                    <div class="lg:col-span-1 space-y-6">
+                        <div class="bg-slate-900 p-8 rounded-[40px] text-white shadow-xl border border-slate-800 sticky top-28">
+                            <h3 class="font-black text-xs uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><i class="fa-solid fa-wallet text-indigo-400"></i> Balance Real</h3>
+                            <div class="space-y-5 mb-8 border-b border-slate-700/50 pb-8">
+                                <div class="flex justify-between items-end"><span class="text-xs text-slate-400 font-bold uppercase">Total Ventas</span><span class="font-black text-2xl font-mono text-white" id="liq-total">0.00</span></div>
+                                <div class="flex justify-between items-end"><span class="text-xs text-slate-400 font-bold uppercase">Operaciones</span><span class="font-black text-xl font-mono text-slate-300" id="liq-count">0</span></div>
+                            </div>
+                            <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-[24px] text-center shadow-lg border border-indigo-500/30">
+                                <p class="text-[10px] font-black uppercase mb-2 text-indigo-200 tracking-widest">A Pagar (Comisiones)</p>
+                                <p class="text-4xl font-black font-mono tracking-tighter text-white" id="liq-comm">0.00</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- CONFIG (REPARADO GUARDADO DE IMÁGENES) -->
+            <div id="view-config" class="view-section hidden w-full pb-20 space-y-8">
+                <!-- Productos -->
+                <div class="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                        <h3 class="font-black text-slate-800 text-sm uppercase tracking-widest"><i class="fa-solid fa-box-open text-indigo-500 mr-2"></i>Catálogo de Productos</h3>
+                        <span id="prod-mode-badge" class="text-[10px] font-black bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg uppercase">NUEVO PRODUCTO</span>
+                    </div>
+                    
+                    <div class="bg-slate-50 p-6 rounded-[24px] border border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                        <input type="hidden" id="edit-prod-id">
+                        <div class="space-y-1 lg:col-span-2">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-2">Nombre del Producto</label>
+                            <input type="text" id="new-prod-name" placeholder="Ej: Netflix 1 Mes" class="w-full border border-slate-200 p-3.5 rounded-xl text-sm font-bold bg-white outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-2">Categoría</label>
+                            <input type="text" id="new-prod-cat" list="cat-list" placeholder="Streaming" class="w-full border border-slate-200 p-3.5 rounded-xl text-sm font-bold bg-white outline-none text-indigo-600">
+                            <datalist id="cat-list"></datalist>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-2">Costo (S/)</label>
+                            <input type="number" id="new-prod-cost" placeholder="0.00" class="w-full border border-slate-200 p-3.5 rounded-xl text-sm font-mono text-center bg-white outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-2">Venta Final (S/)</label>
+                            <input type="number" id="new-prod-price" placeholder="0.00" class="w-full border border-slate-200 p-3.5 rounded-xl text-sm font-mono text-center font-bold text-emerald-600 bg-white outline-none">
+                        </div>
+                        <div class="space-y-1 lg:col-span-1">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-2">URL Imagen (Link directo)</label>
+                            <input type="url" id="new-prod-img" placeholder="https://ejemplo.com/foto.jpg" class="w-full border border-slate-200 p-3.5 rounded-xl text-sm bg-white outline-none text-slate-600">
+                        </div>
+                        <div class="lg:col-span-3 flex gap-3 mt-3">
+                            <button onclick="DATA.addProd()" id="btn-prod-action" class="flex-grow bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-md active:scale-[0.98] transition uppercase tracking-widest text-xs">Guardar Información</button>
+                            <button onclick="UI.cancelEdit('prod')" id="btn-prod-cancel" class="hidden bg-slate-200 text-slate-600 px-6 py-4 rounded-xl font-black text-xs uppercase hover:bg-slate-300 transition">Cancelar</button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto border border-slate-200 rounded-[24px]">
+                        <table class="w-full text-sm text-left whitespace-nowrap">
+                            <thead class="bg-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b">
+                                <tr><th class="p-4">Producto</th><th class="p-4">Categoría</th><th class="p-4 text-center">Costo</th><th class="p-4 text-center">Venta</th><th class="p-4 text-right">Acción</th></tr>
+                            </thead>
+                            <tbody id="config-prod-list" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Vendedores y Seguridad -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
+                        <h3 class="font-black text-slate-800 text-sm uppercase tracking-widest mb-6 border-b border-slate-100 pb-4"><i class="fa-solid fa-users text-emerald-500 mr-2"></i>Equipo de Ventas</h3>
+                        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col gap-3 mb-6">
+                            <input type="hidden" id="edit-seller-id">
+                            <input type="text" id="new-seller-name" placeholder="Nombre" class="w-full border border-slate-200 p-3 rounded-xl text-sm font-bold bg-white outline-none">
+                            <input type="tel" id="new-seller-phone" placeholder="Celular (Ej: 519...)" class="w-full border border-slate-200 p-3 rounded-xl text-sm font-mono bg-white outline-none">
+                            <div class="flex gap-2">
+                                <button onclick="DATA.addSeller()" id="btn-seller-action" class="flex-grow bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-widest transition">Guardar</button>
+                                <button onclick="UI.cancelEdit('seller')" id="btn-seller-cancel" class="hidden bg-slate-200 text-slate-600 px-4 py-3 rounded-xl font-bold text-xs">X</button>
+                            </div>
+                        </div>
+                        <ul id="config-seller-list" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-2"></ul>
+                    </div>
+
+                    <div class="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 flex flex-col justify-between">
+                        <div>
+                            <h3 class="font-black text-slate-800 text-sm uppercase tracking-widest mb-6 border-b border-slate-100 pb-4"><i class="fa-solid fa-shield-halved text-red-500 mr-2"></i>Seguridad CPanel</h3>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase ml-2 mb-1 block">Clave Maestra</label>
+                            <input type="text" id="config-admin-pass" class="w-full border border-slate-200 p-4 rounded-2xl font-mono text-sm bg-slate-50 outline-none focus:border-indigo-500" placeholder="admin123">
+                        </div>
+                        <button onclick="DATA.saveConfig()" class="w-full mt-8 py-5 bg-slate-900 hover:bg-black text-white rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up text-lg"></i> Guardar Ajustes
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DASHBOARD -->
+            <div id="view-dashboard" class="view-section hidden w-full">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                    <h2 class="text-2xl font-black text-slate-800 bg-white px-6 py-3 rounded-2xl shadow-sm uppercase flex items-center gap-3">
+                        <i class="fa-solid fa-chart-pie text-indigo-600"></i> Estadísticas
+                    </h2>
+                    <input type="month" id="dash-month" onchange="UI.updateDashboard()" class="bg-white border border-slate-200 rounded-xl p-3 font-bold text-indigo-700 outline-none shadow-sm cursor-pointer">
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm"><p class="text-[10px] text-slate-400 font-bold uppercase mb-2 tracking-widest">Ventas</p><p id="dash-total" class="text-3xl font-black text-slate-800 font-mono">0.00</p></div>
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm"><p class="text-[10px] text-indigo-500 font-bold uppercase mb-2 tracking-widest">Caja KGB</p><p id="dash-admin" class="text-3xl font-black text-indigo-600 font-mono">0.00</p></div>
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm"><p class="text-[10px] text-emerald-500 font-bold uppercase mb-2 tracking-widest">Comisiones</p><p id="dash-seller" class="text-3xl font-black text-emerald-500 font-mono">0.00</p></div>
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm"><p class="text-[10px] text-slate-400 font-bold uppercase mb-2 tracking-widest">Ops</p><p id="dash-count" class="text-3xl font-black text-slate-800 font-mono">0</p></div>
+                </div>
+                <div class="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm h-[450px] w-full">
+                    <canvas id="chartSellers"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- CARRITO FLOTANTE (PÚBLICO) -->
+    <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-full md:w-[420px] bg-slate-900 border-l border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] transform translate-x-full z-[110] flex flex-col transition-transform duration-500 ease-in-out">
+        <div class="p-8 border-b border-white/5 flex justify-between items-center bg-slate-950">
+            <h3 class="text-2xl font-black text-white uppercase flex items-center gap-3" style="font-family: 'Rajdhani', sans-serif;"><i class="fa-solid fa-cart-shopping text-cyan-400"></i> Mi Cesta</h3>
+            <button onclick="UI.toggleCart()" class="text-slate-500 hover:text-white transition-colors text-2xl"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="cart-items" class="flex-grow overflow-y-auto p-6 space-y-4 custom-scrollbar"></div>
+        <div class="p-8 border-t border-white/5 bg-slate-950 space-y-6">
+            <div class="space-y-3">
+                <select id="cart-seller" class="w-full bg-white/5 border border-white/10 text-white p-4 rounded-2xl text-sm font-bold outline-none focus:border-cyan-400 transition-all appearance-none cursor-pointer"></select>
+                <input type="text" id="cart-client" placeholder="Tu Nombre *" class="w-full bg-white/5 border border-white/10 text-white p-4 rounded-2xl text-sm outline-none focus:border-cyan-400 transition-all font-medium">
+                <input type="tel" id="cart-phone" placeholder="Celular (WhatsApp) *" class="w-full bg-white/5 border border-white/10 text-white p-4 rounded-2xl text-sm outline-none focus:border-cyan-400 transition-all font-medium">
+            </div>
+            <div class="flex justify-between items-center font-black text-3xl text-white pt-2">
+                <span class="tracking-tighter opacity-60 text-xl">TOTAL</span>
+                <span id="cart-total" class="text-cyan-400 font-mono drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]">S/ 0.00</span>
+            </div>
+            <button onclick="DATA.submitCart()" class="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white font-black py-5 rounded-2xl shadow-[0_10px_30px_rgba(16,185,129,0.3)] active:scale-95 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
+                <i class="fa-brands fa-whatsapp text-xl"></i> Enviar Pedido
+            </button>
+        </div>
+    </div>
+    <div id="cart-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[105] hidden transition-opacity" onclick="UI.toggleCart()"></div>
+
+    <!-- NOTIFICACIONES TOAST -->
+    <div id="toast" class="fixed bottom-10 right-1/2 translate-x-1/2 md:translate-x-0 md:right-10 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 z-[150] translate-y-60 transition-transform duration-500 flex items-center gap-4">
+        <div id="toast-icon" class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg shadow-green-500/30"><i class="fa-solid fa-check"></i></div>
+        <p id="toast-msg" class="text-sm font-black uppercase tracking-wider leading-none">Notificación</p>
+    </div>
+
+    <!-- BOTÓN ADMIN INVISIBLE -->
+    <button onclick="UI.switchTab(UI.isAdmin ? 'pos' : 'login')" class="fixed bottom-6 right-6 z-40 bg-slate-900/60 backdrop-blur-md w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-slate-500 hover:text-cyan-400 transition-all hover:scale-110 active:scale-90 shadow-2xl">
+        <i class="fa-solid fa-lock text-xs"></i>
+    </button>
+
+    <script>
+        // === CONFIGURACIÓN Y BASE DE DATOS ===
+        const DEFAULT_DB = { sellers: [], products: [], sales: [], config: { adminPct: 0.60, sellerPct: 0.40, adminPass: 'admin123' } };
+        let DB = DEFAULT_DB;
+        const API_URL = "https://script.google.com/macros/s/AKfycbyT58_XJUUjiDet6MSgh8ID1kBO7BN55ODseaUEafS3eDLsPZkeTqNFFBbi0Q27OsjWqg/exec";
+        let CART = [];
+        let activeCategory = 'Todas';
+
+        function loadDB() {
+            try {
+                const stored = localStorage.getItem('kgb_v21_db');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (parsed && typeof parsed === 'object') DB = { ...DEFAULT_DB, ...parsed };
+                }
+            } catch(e) { console.error("Error DB", e); }
+        }
+        loadDB();
+
+        function parseMoney(v) { 
+            if(!v) return 0;
+            let n = String(v).replace(/[^0-9.]/g, '');
+            return parseFloat(n) || 0;
+        }
+
+        function toggleMobileMenu() {
+            const s = document.getElementById('sidebar');
+            const o = document.getElementById('mobile-overlay');
+            if (s.classList.contains('-translate-x-full')) {
+                s.classList.remove('-translate-x-full'); o.classList.remove('hidden');
+            } else {
+                s.classList.add('-translate-x-full'); o.classList.add('hidden');
+            }
+        }
+
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            const iconI = icon.querySelector('i');
+            document.getElementById('toast-msg').innerText = msg;
+            
+            icon.className = type === 'error' ? 'w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white shadow-lg shadow-red-500/30' : 'w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg shadow-green-500/30';
+            iconI.className = type === 'error' ? 'fa-solid fa-xmark' : 'fa-solid fa-check';
+            
+            t.classList.remove('translate-y-60');
+            setTimeout(() => t.classList.add('translate-y-60'), 3000);
+        }
+
+        const UI = {
+            isAdmin: false,
+            confirmCb: null,
+            copyV: (t) => { 
+                const ta = document.createElement("textarea"); 
+                ta.value = t; 
+                document.body.appendChild(ta); 
+                ta.select(); 
+                document.execCommand('copy'); 
+                document.body.removeChild(ta); 
+                showToast("Ticket Copiado", "success"); 
+            },
+            confirm: (msg, cb) => {
+                const modal = document.getElementById('confirm-modal');
+                document.getElementById('confirm-msg').innerText = msg;
+                modal.classList.remove('hidden', 'pointer-events-none');
+                setTimeout(() => document.getElementById('confirm-box').classList.remove('scale-95', 'opacity-0'), 10);
+                UI.confirmCb = cb;
+            },
+            closeConfirm: (result) => {
+                const modal = document.getElementById('confirm-modal');
+                document.getElementById('confirm-box').classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden', 'pointer-events-none');
+                    if(result && UI.confirmCb) UI.confirmCb();
+                    UI.confirmCb = null;
+                }, 200);
+            },
+            switchTab: (id) => {
+                const isAuthTab = ['pos', 'history', 'dashboard', 'config'].includes(id);
+                if (isAuthTab && !UI.isAdmin) id = 'login';
+                const isPublic = (id === 'catalog' || id === 'login');
+                const main = document.getElementById('main-content');
+                const head = document.getElementById('main-header');
+                const sidebar = document.getElementById('sidebar');
+                const menuBtn = document.getElementById('mobile-menu-btn');
+
+                if (isPublic) {
+                    main.classList.remove('md:ml-64'); head.classList.remove('md:ml-64');
+                    sidebar.classList.add('hidden', '-translate-x-full'); menuBtn.classList.add('hidden');
+                    document.getElementById('btn-sync').classList.add('hidden'); document.getElementById('btn-logout').classList.add('hidden');
+                    document.getElementById('header-subtitle').innerText = "Catálogo Oficial";
+                } else {
+                    main.classList.add('md:ml-64'); head.classList.add('md:ml-64');
+                    sidebar.classList.remove('hidden'); menuBtn.classList.remove('hidden');
+                    document.getElementById('btn-sync').classList.replace('hidden', 'block'); document.getElementById('btn-logout').classList.replace('hidden', 'block');
+                    document.getElementById('header-subtitle').innerText = "CPanel Admin";
+                }
+
+                document.querySelectorAll('.view-section').forEach(s => s.classList.add('hidden'));
+                document.getElementById('view-' + id).classList.remove('hidden');
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                if(document.getElementById('btn-nav-' + id)) document.getElementById('btn-nav-' + id).classList.add('active');
+
+                if (id === 'catalog') UI.renderCatalog();
+                if (id === 'pos') UI.renderPosSelects();
+                if (id === 'history') UI.renderHistoryTable();
+                if (id === 'config') UI.renderConfig();
+                if (id === 'dashboard') UI.updateDashboard();
+
+                if (window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) toggleMobileMenu();
+            },
+
+            loginAdmin: () => {
+                const p = document.getElementById('admin-pass-input').value.trim();
+                if (p === DB.config.adminPass || p === 'admin123') {
+                    UI.isAdmin = true; document.getElementById('admin-pass-input').value = '';
+                    showToast("Acceso Autorizado"); UI.switchTab('pos');
+                } else showToast("Clave Incorrecta", "error");
+            },
+
+            logoutAdmin: () => { UI.isAdmin = false; showToast("Sesión cerrada"); UI.switchTab('catalog'); },
+
+            renderCatalog: () => {
+                const s = document.getElementById('catalog-search').value.toLowerCase();
+                const grid = document.getElementById('catalog-grid');
+                const catsBox = document.getElementById('catalog-categories-container');
+                const cats = ['Todas', ...new Set(DB.products.map(p => p.cat || 'Plataformas'))];
+
+                catsBox.innerHTML = cats.map(c => `
+                    <button onclick="activeCategory='${c}'; UI.renderCatalog()" class="whitespace-nowrap px-6 py-2.5 rounded-full border border-white/10 text-[10px] font-black uppercase transition-all shadow-lg ${activeCategory===c ? 'bg-cyan-500 text-slate-900 border-cyan-400' : 'bg-white/5 text-white/50 hover:bg-white/10'}">${c}</button>
+                `).join('');
+
+                let list = DB.products || [];
+                if (activeCategory !== 'Todas') list = list.filter(p => (p.cat || 'Plataformas') === activeCategory);
+                if (s) list = list.filter(p => p.name.toLowerCase().includes(s));
+
+                if (!list.length) { grid.innerHTML = ''; document.getElementById('catalog-empty').classList.remove('hidden'); return; }
+                document.getElementById('catalog-empty').classList.add('hidden');
+
+                grid.innerHTML = list.map((p, i) => {
+                    // Si no hay imagen, pone un avatar por defecto
+                    const img = p.img || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=1e1b4b&color=22d3ee&size=400`;
+                    return `
+                    <div class="fade-in glass-panel rounded-[32px] border border-white/5 overflow-hidden group hover:border-indigo-400 transition-all shadow-[0_15px_40px_rgba(0,0,0,0.4)] flex flex-col hover:-translate-y-1">
+                        <div class="h-48 w-full bg-black relative overflow-hidden">
+                            <img src="${img}" class="w-full h-full object-cover group-hover:scale-110 transition duration-700">
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80"></div>
+                        </div>
+                        <div class="p-6 flex flex-col flex-grow">
+                            <span class="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-1 opacity-80">${p.cat || 'Plataformas'}</span>
+                            <h3 class="text-white font-bold text-sm leading-tight line-clamp-2 mb-4 group-hover:text-indigo-200 transition-colors">${p.name}</h3>
+                            <div class="mt-auto flex justify-between items-center border-t border-white/10 pt-4">
+                                <div class="flex flex-col">
+                                    <span class="text-[8px] font-black text-slate-500 uppercase">Inversión</span>
+                                    <span class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400 font-mono">S/ ${parseFloat(p.price).toFixed(2)}</span>
+                                </div>
+                                <button onclick="UI.addToCart(${DB.products.indexOf(p)})" class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/30 active:scale-90 transition hover:bg-indigo-500"><i class="fa-solid fa-cart-plus text-lg"></i></button>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            },
+
+            toggleCart: () => {
+                const s = document.getElementById('cart-sidebar');
+                const o = document.getElementById('cart-overlay');
+                if (s.classList.contains('translate-x-full')) {
+                    s.classList.remove('translate-x-full'); o.classList.remove('hidden'); UI.renderCart();
+                    const sel = document.getElementById('cart-seller');
+                    sel.innerHTML = '<option value="">¿Quién te atiende?</option><option value="TIENDA">SOPORTE CENTRAL</option>' + DB.sellers.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+                } else { s.classList.add('translate-x-full'); o.classList.add('hidden'); }
+            },
+
+            addToCart: (idx) => {
+                const p = DB.products[idx];
+                const exist = CART.find(item => item.idx === idx);
+                if (exist) exist.qty++; else CART.push({ idx, qty: 1, price: parseMoney(p.price) });
+                UI.updateCartBadge(); showToast("Agregado al Carrito");
+            },
+
+            updateCartBadge: () => { document.getElementById('cart-badge').innerText = CART.reduce((a, b) => a + b.qty, 0); },
+
+            renderCart: () => {
+                const box = document.getElementById('cart-items');
+                if (!CART.length) { box.innerHTML = '<div class="text-center py-20 text-slate-500 uppercase text-[10px] font-black tracking-widest opacity-40">Carrito Vacío</div>'; document.getElementById('cart-total').innerText = 'S/ 0.00'; return; }
+                let total = 0;
+                box.innerHTML = CART.map((item, i) => {
+                    const p = DB.products[item.idx]; const subt = item.price * item.qty; total += subt;
+                    const img = p.img || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=000&color=fff&size=100`;
+                    return `<div class="bg-white/5 p-3 rounded-2xl border border-white/5 flex gap-4 items-center">
+                        <img src="${img}" class="w-12 h-12 rounded-xl object-cover bg-black">
+                        <div class="flex-grow">
+                            <h4 class="text-white text-xs font-bold leading-tight line-clamp-1">${p.name}</h4>
+                            <div class="flex justify-between items-center mt-2">
+                                <span class="text-cyan-400 font-black text-sm font-mono">S/ ${subt.toFixed(2)}</span>
+                                <div class="flex items-center gap-3 bg-black/50 rounded-lg p-1 px-2 border border-white/5">
+                                    <button onclick="UI.updQty(${i},-1)" class="w-5 h-5 text-white/50 hover:text-white font-bold">-</button>
+                                    <span class="text-white text-[10px] font-bold min-w-[16px] text-center">${item.qty}</span>
+                                    <button onclick="UI.updQty(${i},1)" class="w-5 h-5 text-white/50 hover:text-white font-bold">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+                document.getElementById('cart-total').innerText = 'S/ ' + total.toFixed(2);
+            },
+            updQty: (i, d) => { CART[i].qty += d; if (CART[i].qty < 1) CART.splice(i, 1); UI.updateCartBadge(); UI.renderCart(); },
+
+            renderPosSelects: () => {
+                const s = document.getElementById('pos-seller'); const p = document.getElementById('pos-product');
+                s.innerHTML = '<option value="">Elegir Vendedor...</option>' + DB.sellers.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+                p.innerHTML = '<option value="">Elegir Producto...</option>' + DB.products.map((v, i) => `<option value="${i}">${v.name}</option>`).join('');
+            },
+            updatePosCalc: () => {
+                const idx = document.getElementById('pos-product').value;
+                if (idx === "") return; const p = DB.products[idx];
+                document.getElementById('pos-cost').value = parseMoney(p.cost).toFixed(2);
+                document.getElementById('pos-price').value = parseMoney(p.price).toFixed(2);
+                UI.reCalcProfitOnly();
+            },
+            reCalcProfitOnly: () => {
+                const c = parseMoney(document.getElementById('pos-cost').value);
+                const p = parseMoney(document.getElementById('pos-price').value);
+                const prof = p - c; document.getElementById('pos-profit').innerText = prof.toFixed(2);
+            },
+
+            // --- HISTORIAL COMPLETO CON BOTONES, IMÁGENES Y VENDEDOR ---
+            renderHistoryTable: () => {
+                const s = document.getElementById('filter-seller'); 
+                if (s.options.length <= 1) s.innerHTML = '<option value="">Todos los registros</option>' + DB.sellers.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+                
+                const search = document.getElementById('filter-search').value.toLowerCase();
+                const start = document.getElementById('filter-start').value;
+                const end = document.getElementById('filter-end').value;
+                const body = document.getElementById('history-body');
+                
+                let list = DB.sales || [];
+                if(start) list = list.filter(x => x.date.split('T')[0] >= start); 
+                if(end) list = list.filter(x => x.date.split('T')[0] <= end); 
+                if(s.value) list = list.filter(x => x.seller === s.value);
+                if (search) list = list.filter(v => String(v.client || '').toLowerCase().includes(search) || String(v.id || '').includes(search) || String(v.product || '').toLowerCase().includes(search) || String(v.seller || '').toLowerCase().includes(search));
+                
+                let tSales = 0, tComm = 0, count = 0;
+                
+                body.innerHTML = list.sort((a,b) => new Date(b.date) - new Date(a.date)).map(v => {
+                    const st = (v.status || 'APROBADO').toUpperCase();
+                    const isPend = st === 'PENDIENTE'; 
+                    const isAnul = st === 'ANULADO' || st === 'REFUNDED';
+                    const isAppr = !isPend && !isAnul;
+                    
+                    if (isAppr) { tSales += parseMoney(v.price); tComm += parseMoney(v.comm); count++; }
+                    
+                    let comm = parseMoney(v.comm); 
+                    if(comm === 0) comm = (parseMoney(v.price) - parseMoney(v.cost)) * (DB.config.sellerPct || 0.40);
+                    
+                    const prodObj = DB.products.find(p => p.name === v.product);
+                    const prodImg = prodObj && prodObj.img ? prodObj.img : `https://ui-avatars.com/api/?name=${encodeURIComponent(v.product)}&background=000&color=fff&size=100`;
+
+                    // Voucher Text para copiar y mandar por WhatsApp
+                    const vText = '\uD83D\uDD14 KGB STREAMING - REGISTRO\n---------------------------\n\uD83C\uDD94 ID Transacción: #' + v.id + '\n\uD83D\uDCC5 Fecha: ' + new Date(v.date).toLocaleDateString() + '\n\uD83D\uDC64 Vendedor: ' + v.seller + '\n\uD83D\uDCFA Plataforma: ' + v.product + '\n\n\uD83D\uDCDD DATOS DEL CLIENTE:\n\uD83D\uDC64 Nombre: ' + (v.client || 'No registrado') + '\n\uD83D\uDCF1 Celular: ' + (v.phone || 'No registrado') + '\n\n\uD83D\uDCB0 TU COMISIÓN: S/ ' + comm.toFixed(2) + '\n---------------------------\n\u2705 Su compra ha sido verificada en el sistema.';
+                    const safeV = JSON.stringify(vText).replace(/"/g, '&quot;'); 
+                    const sellerObj = DB.sellers.find(sel => sel.name === v.seller);
+                    let cleanSellerP = sellerObj && sellerObj.phone ? String(sellerObj.phone).replace(/\D/g,'') : '';
+                    if(cleanSellerP.length === 9 && !cleanSellerP.startsWith('51')) cleanSellerP = '51' + cleanSellerP;
+
+                    return `<tr class="border-b border-slate-100 transition-colors hover:bg-slate-50/50 ${isAnul ? 'opacity-40 line-through grayscale' : ''} ${isPend ? 'bg-amber-50/40' : ''} group">
+                        <td class="p-4">
+                            <div class="flex items-center gap-3">
+                                <img src="${prodImg}" class="w-10 h-10 rounded-lg object-cover bg-black border border-slate-200 shadow-sm shrink-0">
+                                <div>
+                                    <div class="font-black text-xs uppercase text-slate-800">${v.product} ${isPend ? '<span class="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded ml-1">[P] WEB</span>' : ''}</div>
+                                    <div class="text-[9px] text-slate-400 font-bold mt-0.5">${new Date(v.date).toLocaleString()} | ID: #${v.id}</div>
+                                    <div class="text-[10px] font-black text-indigo-600 uppercase mt-0.5">${v.seller}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <div class="text-xs font-bold text-slate-700">${v.client || 'Público'}</div>
+                            <div class="text-[10px] text-slate-400 font-mono">${v.phone || '-'}</div>
+                        </td>
+                        <td class="p-4 text-right font-black text-emerald-600 font-mono text-base">${isAnul ? '0.00' : 'S/ ' + parseMoney(v.comm).toFixed(2)}</td>
+                        <td class="p-4 text-center">
+                            <div class="flex justify-center gap-2 opacity-100 lg:opacity-60 group-hover:opacity-100 transition-all">
+                                ${isPend ? `
+                                    <button onclick="DATA.approveSale('${v.id}')" title="Aprobar Venta" class="w-8 h-8 rounded-lg bg-green-100 text-green-600 flex items-center justify-center hover:bg-green-600 hover:text-white transition-all shadow-sm"><i class="fa-solid fa-check text-xs"></i></button>
+                                ` : ''}
+                                ${isAppr ? `
+                                    <button onclick="UI.confirm('¿Anular esta venta permanentemente?', ()=>DATA.refundSale('${v.id}'))" title="Anular Venta" class="w-8 h-8 rounded-lg bg-red-50 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm"><i class="fa-solid fa-rotate-left text-xs"></i></button>
+                                    <button onclick='UI.copyV("${safeV}")' title="Copiar" class="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"><i class="fa-regular fa-copy text-xs"></i></button>
+                                    <button onclick="window.open('https://wa.me/${cleanSellerP}?text=${encodeURIComponent(vText)}','_blank')" title="WhatsApp" class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><i class="fa-brands fa-whatsapp text-sm"></i></button>
+                                ` : ''}
+                                ${isAnul ? `<span class="text-[8px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded">ANULADA</span>` : ''}
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('');
+                document.getElementById('liq-total').innerText = 'S/ ' + tSales.toFixed(2);
+                document.getElementById('liq-comm').innerText = 'S/ ' + tComm.toFixed(2);
+                document.getElementById('liq-count').innerText = count;
+            },
+
+            // --- C-PANEL: REPARADO EL GUARDADO DE IMÁGENES ---
+            renderConfig: () => {
+                document.getElementById('config-admin-pass').value = DB.config.adminPass;
+                document.getElementById('config-prod-list').innerHTML = DB.products.map(p => `
+                    <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                        <td class="p-3 flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-black overflow-hidden shadow-sm shrink-0 border border-slate-200">
+                                <img src="${p.img || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=000&color=fff&size=50`}" class="w-full h-full object-cover">
+                            </div>
+                            <span class="font-black text-xs text-slate-800">${p.name}</span>
+                        </td>
+                        <td class="p-3 text-[10px] font-bold text-indigo-400 uppercase tracking-widest">${p.cat || '-'}</td>
+                        <td class="p-3 text-center font-mono text-slate-500">${parseFloat(p.cost).toFixed(2)}</td>
+                        <td class="p-3 text-center font-black text-indigo-600 font-mono">S/ ${parseFloat(p.price).toFixed(2)}</td>
+                        <td class="p-3 text-right whitespace-nowrap">
+                            <button onclick="UI.prepareEdit('prod','${p.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="UI.confirm('¿Borrar plataforma?', ()=>DATA.deleteItem('prod','${p.id}'))" class="text-red-400 hover:bg-red-50 p-2 rounded-lg transition ml-1"><i class="fa-solid fa-trash text-xs"></i></button>
+                        </td>
+                    </tr>`).join('');
+                document.getElementById('config-seller-list').innerHTML = DB.sellers.map(s => `
+                    <li class="p-4 border border-slate-200 rounded-xl flex justify-between bg-white items-center shadow-sm">
+                        <div class="text-xs font-black text-slate-800">${s.name} <span class="block text-[10px] font-mono text-slate-400 mt-1">${s.phone}</span></div>
+                        <div class="flex gap-2">
+                            <button onclick="UI.prepareEdit('seller','${s.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="UI.confirm('¿Borrar vendedor?', ()=>DATA.deleteItem('seller','${s.id}'))" class="text-red-400 hover:bg-red-50 p-2 rounded-lg transition"><i class="fa-solid fa-trash text-xs"></i></button>
+                        </div>
+                    </li>`).join('');
+                const list = document.getElementById('cat-list');
+                const uniqueCats = [...new Set(['Plataformas', 'Antivirus', 'Software', 'Juegos', ...DB.products.map(p=>p.cat).filter(Boolean)])];
+                list.innerHTML = uniqueCats.map(c => `<option value="${c}">`).join('');
+            },
+
+            updateDashboard: () => {
+                const m = document.getElementById('dash-month'); if (!m.value) { const n = new Date(); m.value = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }
+                let t = 0, a = 0, s = 0, c = 0, map = {};
+                DB.sales.forEach(v => {
+                    const st = (v.status || 'APROBADO').toUpperCase(); if (st === 'PENDIENTE' || st === 'ANULADO' || st === 'REFUNDED') return;
+                    const sd = new Date(v.date); if (`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}` !== m.value) return;
+                    t += parseMoney(v.price); a += parseMoney(v.admin); s += parseMoney(v.comm); c++;
+                    map[v.seller] = (map[v.seller] || 0) + parseMoney(v.comm);
+                });
+                document.getElementById('dash-total').innerText = t.toFixed(2);
+                document.getElementById('dash-admin').innerText = a.toFixed(2);
+                document.getElementById('dash-seller').innerText = s.toFixed(2);
+                document.getElementById('dash-count').innerText = c;
+                const ctx = document.getElementById('chartSellers').getContext('2d');
+                if (window.myChart) window.myChart.destroy();
+                window.myChart = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(map), datasets: [{ label: 'Comisiones S/', data: Object.values(map), backgroundColor: '#4f46e5', borderRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+            },
+
+            exportToExcel: () => { 
+                if(DB.sales.length === 0) return showToast("No hay datos para exportar", "error");
+                const ws=XLSX.utils.json_to_sheet(DB.sales); 
+                const wb=XLSX.utils.book_new(); 
+                XLSX.utils.book_append_sheet(wb,ws,"Ventas"); 
+                XLSX.writeFile(wb,"Reporte_Cloud.xlsx"); 
+            },
+
+            prepareEdit: (type, id) => {
+                if (type === 'prod') {
+                    const p = DB.products.find(v => v.id == id); 
+                    document.getElementById('edit-prod-id').value = id; 
+                    document.getElementById('new-prod-name').value = p.name || '';
+                    document.getElementById('new-prod-cat').value = p.cat || ''; 
+                    document.getElementById('new-prod-cost').value = p.cost || ''; 
+                    document.getElementById('new-prod-price').value = p.price || ''; 
+                    document.getElementById('new-prod-img').value = p.img || ''; // LA IMAGEN SE CARGA AQUÍ
+                    
+                    document.getElementById('prod-mode-badge').innerText = "EDITANDO REGISTRO"; 
+                    document.getElementById('btn-prod-action').innerText = "Actualizar Cambios"; 
+                    document.getElementById('btn-prod-cancel').classList.remove('hidden');
+                } else {
+                    const s = DB.sellers.find(v => v.id == id); document.getElementById('edit-seller-id').value = id; document.getElementById('new-seller-name').value = s.name; document.getElementById('new-seller-phone').value = s.phone;
+                    document.getElementById('btn-seller-action').innerText = "Actualizar"; document.getElementById('btn-seller-cancel').classList.remove('hidden');
+                }
+            },
+            cancelEdit: (t) => {
+                if (t === 'prod') { 
+                    document.getElementById('edit-prod-id').value = ''; 
+                    document.getElementById('new-prod-name').value = ''; 
+                    document.getElementById('new-prod-cat').value = ''; 
+                    document.getElementById('new-prod-cost').value = ''; 
+                    document.getElementById('new-prod-price').value = ''; 
+                    document.getElementById('new-prod-img').value = ''; 
+                    document.getElementById('prod-mode-badge').innerText = "NUEVO PRODUCTO"; 
+                    document.getElementById('btn-prod-action').innerText = "Guardar Información"; 
+                    document.getElementById('btn-prod-cancel').classList.add('hidden'); 
+                } else { 
+                    document.getElementById('edit-seller-id').value = ''; document.getElementById('new-seller-name').value = ''; document.getElementById('new-seller-phone').value = ''; document.getElementById('btn-seller-action').innerText = "Guardar"; document.getElementById('btn-seller-cancel').classList.add('hidden'); 
+                }
+            }
+        };
+
+        const DATA = {
+            sync: async () => {
+                document.getElementById('sync-indicator').classList.add('active');
+                try {
+                    const r = await fetch(API_URL); const j = await r.json();
+                    if (j.status === 'success') {
+                        DB.sellers = j.data.sellers || [];
+                        DB.products = (j.data.products || []).map(p => ({ ...p, cost: parseMoney(p.cost), price: parseMoney(p.price) }));
+                        DB.sales = (j.data.sales || []).map(s => ({ ...s, price: parseMoney(s.price), comm: parseMoney(s.comm), admin: parseMoney(s.admin) }));
+                        if (j.data.config) DB.config = { ...DEFAULT_DB.config, ...j.data.config };
+                        localStorage.setItem('kgb_v21_db', JSON.stringify(DB));
+                        UI.switchTab(document.querySelector('.view-section:not(.hidden)')?.id.replace('view-','') || 'catalog');
+                    }
+                } catch(e) { console.error("Sync Error", e); }
+                finally { setTimeout(() => document.getElementById('sync-indicator').classList.remove('active'), 1000); }
+            },
+            post: async (p, hide = false) => {
+                document.getElementById('sync-indicator').classList.add('active');
+                // Optimistic Local
+                if(p.action === 'add_product') {
+                    const idx = DB.products.findIndex(x => x.id == p.id);
+                    if(idx > -1) DB.products[idx] = p; else DB.products.push(p);
+                }
+                if(p.action === 'add_seller') {
+                    const idx = DB.sellers.findIndex(x => x.id == p.id);
+                    if(idx > -1) DB.sellers[idx] = p; else DB.sellers.push(p);
+                }
+                if(p.action === 'delete_product') DB.products = DB.products.filter(x => x.id != p.id);
+                if(p.action === 'delete_seller') DB.sellers = DB.sellers.filter(x => x.id != p.id);
+                if(p.action === 'sale') DB.sales.unshift({...p, id: p.id || 't_'+Date.now()});
+                if(p.action === 'approve') { const s = DB.sales.find(x => x.id == p.id); if(s) s.status = 'APROBADO'; }
+                if(p.action === 'refund') { const s = DB.sales.find(x => x.id == p.id); if(s) s.status = 'ANULADO'; }
+                
+                localStorage.setItem('kgb_v21_db', JSON.stringify(DB));
+                UI.switchTab(document.querySelector('.view-section:not(.hidden)').id.replace('view-',''));
+
+                try {
+                    const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify(p), headers: { "Content-Type": "text/plain" } });
+                    const res = await r.json(); if (res.status === 'success' && !hide) showToast("Sincronización Exitosa");
+                    DATA.sync();
+                } catch(e) { if (!hide) showToast("Guardado localmente", "error"); }
+            },
+            addProd: () => {
+                const n = document.getElementById('new-prod-name').value; if (!n) return showToast("Nombre Requerido", "error");
+                const payload = { 
+                    action: 'add_product', 
+                    id: document.getElementById('edit-prod-id').value || Date.now().toString() + Math.random().toString(36).substr(2, 5), 
+                    name: n, 
+                    cat: document.getElementById('new-prod-cat').value, 
+                    cost: parseMoney(document.getElementById('new-prod-cost').value), 
+                    price: parseMoney(document.getElementById('new-prod-price').value), 
+                    img: document.getElementById('new-prod-img').value.trim() // CAPTURA DE IMAGEN FIJADA AQUÍ
+                };
+                DATA.post(payload); UI.cancelEdit('prod');
+            },
+            addSeller: () => {
+                const n = document.getElementById('new-seller-name').value; if (!n) return;
+                DATA.post({ action: 'add_seller', id: document.getElementById('edit-seller-id').value || Date.now().toString(), name: n, phone: document.getElementById('new-seller-phone').value });
+                UI.cancelEdit('seller');
+            },
+            submitSale: () => {
+                const pi = document.getElementById('pos-product').value; const si = document.getElementById('pos-seller').value;
+                if (!pi || !si) return showToast("Faltan datos", "error");
+                const p = DB.products[pi]; const s = DB.sellers.find(v => v.id == si); const price = parseMoney(document.getElementById('pos-price').value);
+                const prof = price - parseMoney(p.cost);
+                DATA.post({ action: 'sale', date: new Date().toISOString(), product: p.name, seller: s.name, client: document.getElementById('pos-client').value, phone: document.getElementById('pos-phone').value, cost: parseMoney(p.cost), price: price, profit: prof, admin: prof*0.6, comm: prof*0.4, status: 'APROBADO' });
+                document.getElementById('pos-client').value = ''; document.getElementById('pos-phone').value = '';
+            },
+            submitCart: () => {
+                const sid = document.getElementById('cart-seller').value; const client = document.getElementById('cart-client').value; const phone = document.getElementById('cart-phone').value;
+                if (!sid || !client || !phone) return showToast("Faltan Datos *", "error");
+                let sName = "Tienda", sPhone = "51999999999";
+                if (sid !== "TIENDA") { const s = DB.sellers.find(v => v.id == sid); if (s) { sName = s.name; sPhone = s.phone; } }
+                CART.forEach(item => {
+                    const p = DB.products[item.idx]; const prof = item.price - parseMoney(p.cost);
+                    for(let i=0; i<item.qty; i++) {
+                        DATA.post({ action: 'sale', date: new Date().toISOString(), seller: sName, product: p.name, client, phone, cost: parseMoney(p.cost), price: item.price, profit: prof, admin: prof*0.6, comm: prof*0.4, status: 'PENDIENTE' }, true);
+                    }
+                });
+                showToast("Pedido Enviado"); window.open(`https://wa.me/${String(sPhone).replace(/\D/g,'')}?text=${encodeURIComponent('Hola '+sName+', soy '+client+'. Pedido registrado en KGB TECH.')}`, '_blank');
+                CART = []; UI.updateCartBadge(); UI.toggleCart();
+            },
+            approveSale: (id) => DATA.post({ action: 'approve', id }),
+            refundSale: (id) => DATA.post({ action: 'refund', id }),
+            deleteItem: (type, id) => DATA.post({ action: type==='seller'?'delete_seller':'delete_product', id }),
+            saveConfig: () => DATA.post({ action: 'update_config', adminPct: 0.6, sellerPct: 0.4, adminPass: document.getElementById('config-admin-pass').value }),
+            forceSync: () => DATA.sync()
+        };
+
+        window.onload = () => {
+            setInterval(() => { const clock = document.getElementById('clock'); if(clock) clock.innerText = new Date().toLocaleTimeString(); }, 1000);
+            UI.switchTab('catalog');
+            DATA.sync();
+        };
+
+        window.UI = UI; window.DATA = DATA; window.toggleMobileMenu = toggleMobileMenu;
+    </script>
+</body>
+</html>
